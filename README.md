@@ -71,3 +71,15 @@ toolchain — so expect to fix build errors on first open in Xcode.
 is backgrounded, so a cascade firing while the phone is in your pocket notifies
 nobody. Fixing that needs something server-side holding the exchange
 connections, running the cascade model, and sending Web Push.
+
+## Credits and licence
+
+The app icon uses a charging bull silhouette designed by **ashiqur79**
+(Image #65893612 at VectorStock.com), used under VectorStock's Free License,
+which permits any use provided the artist is clearly attributed.
+
+https://www.vectorstock.com/royalty-free-vector/charging-bull-silhouette-vector-65893612
+
+That attribution is also shown in the app itself, under the ⓘ button in the tab
+bar — the licence requires it in a credits screen, not just here. If the icon is
+ever replaced with original artwork, both attributions can go.

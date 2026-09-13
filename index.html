@@ -95,6 +95,29 @@
     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   #tabs button[aria-selected="true"]{ color:var(--tint); }
   #tabs button span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+  /* Narrow credits button — the icon artwork's licence requires visible attribution. */
+  #tabs #credits-btn{ flex:0 0 40px; }
+  #tabs #credits-btn svg{ width:17px; height:17px; }
+
+  #credits{
+    position:fixed; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; background:rgba(0,0,0,.72);
+  }
+  #credits[hidden]{ display:none; }
+  #credits .card{
+    background:var(--bar); border:1px solid var(--border); border-radius:14px;
+    padding:20px; max-width:340px; width:100%;
+    box-shadow:0 16px 48px rgba(0,0,0,.6);
+  }
+  #credits h2{ margin:0 0 12px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#e8edf4; }
+  #credits p{ margin:0 0 10px; font-size:12px; line-height:1.55; color:#aeb8c6; font-weight:500; }
+  #credits a{ color:var(--fibo); }
+  #credits button{
+    margin-top:8px; width:100%; padding:10px;
+    background:#1b2230; border:0; border-radius:9px;
+    color:#e8edf4; font:inherit; font-size:12px; cursor:pointer;
+  }
 
   /* Shown only in a browser tab, never once installed. */
   #install{
@@ -122,6 +145,16 @@
 <div id="install" hidden>
   <p>Tap <b>Share → Add to Home Screen</b> for full screen and alerts.</p>
   <button type="button" id="install-x" aria-label="Dismiss">&times;</button>
+</div>
+
+<div id="credits" hidden>
+  <div class="card">
+    <h2>Credits</h2>
+    <p>App icon: charging bull silhouette designed by <b>ashiqur79</b> (Image #65893612 at VectorStock.com).</p>
+    <p><a href="https://www.vectorstock.com/royalty-free-vector/charging-bull-silhouette-vector-65893612" target="_blank" rel="noopener">View the original on VectorStock</a></p>
+    <p>Market data from Bybit, Binance, OKX and Bitget public APIs.</p>
+    <button type="button" id="credits-close">Close</button>
+  </div>
 </div>
 
 <script>
@@ -158,6 +191,27 @@
     tabsEl.appendChild(b);
     t.button = b;
   });
+
+  /* Credits — the icon artwork is used under VectorStock's free licence, which
+     requires the artist to be credited visibly in the app. */
+  (function () {
+    var panel = document.getElementById("credits");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "credits-btn";
+    btn.setAttribute("aria-label", "Credits");
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.6"/></svg>';
+    btn.addEventListener("click", function () { panel.hidden = false; });
+    tabsEl.appendChild(btn);
+
+    document.getElementById("credits-close").addEventListener("click", function () {
+      panel.hidden = true;
+    });
+    panel.addEventListener("click", function (e) {
+      if (e.target === panel) { panel.hidden = true; }
+    });
+  })();
 
   function tabById(id) {
     for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === id) return TABS[i]; }
