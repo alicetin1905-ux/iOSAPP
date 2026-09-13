@@ -42,13 +42,20 @@
   /* Board area: everything above the tab bar.
      status-bar-style is black-translucent, which draws our content straight
      under the status bar / Dynamic Island — so the top has to be pushed down
-     by safe-area-inset-top manually, same as the bottom already is for the
-     home indicator. Without this the boards' own headers sit partly behind
-     the status bar (worst on the taller Dynamic Island inset on 15/16 Pro). */
+     to clear it, same as the bottom already is for the home indicator.
+
+     On at least one real device (iPhone 15 Pro, standalone/Home Screen
+     launch) env(safe-area-inset-*) measured 0px on every side despite a
+     real Dynamic Island being present — so relying on it alone left
+     content sitting under the status bar. max() with a hardcoded floor
+     means the correct push happens even when env() misreports: it only
+     ever adds *more* space than the floor, on a device where env() does
+     report a real (larger) value. 59px covers the Dynamic Island inset;
+     34px is the standard home-indicator height on every Face-ID iPhone. */
   #stage{
     position:fixed; left:0; right:0;
-    top:env(safe-area-inset-top);
-    bottom:calc(54px + env(safe-area-inset-bottom));
+    top:max(env(safe-area-inset-top), 59px);
+    bottom:calc(54px + max(env(safe-area-inset-bottom), 34px));
   }
   #stage iframe{
     position:absolute; inset:0;
@@ -69,8 +76,8 @@
   /* Tab bar */
   #tabs{
     position:fixed; left:0; right:0; bottom:0;
-    height:calc(54px + env(safe-area-inset-bottom));
-    padding-bottom:env(safe-area-inset-bottom);
+    height:calc(54px + max(env(safe-area-inset-bottom), 34px));
+    padding-bottom:max(env(safe-area-inset-bottom), 34px);
     display:flex; align-items:stretch;
     background:var(--bar);
     border-top:1px solid var(--border);
@@ -92,7 +99,7 @@
   /* Shown only in a browser tab, never once installed. */
   #install{
     position:fixed; left:10px; right:10px;
-    bottom:calc(62px + env(safe-area-inset-bottom));
+    bottom:calc(62px + max(env(safe-area-inset-bottom), 34px));
     background:#131a25; border:1px solid var(--border); border-radius:10px;
     padding:11px 13px; display:flex; align-items:center; gap:10px;
     box-shadow:0 8px 28px rgba(0,0,0,.5);
@@ -119,7 +126,7 @@
 
 <!-- Temporary — diagnosing the top/bottom gap on notched iPhones. Screenshot
      this box, then this whole block gets removed once it's fixed. -->
-<pre id="debug" style="position:fixed;top:4px;left:4px;z-index:9999;margin:0;
+<pre id="debug" style="position:fixed;top:max(env(safe-area-inset-top), 59px);left:4px;z-index:9999;margin:4px 0 0;
   padding:6px 8px;background:rgba(0,0,0,.75);color:#7fffa0;font:9px/1.4 ui-monospace,monospace;
   border-radius:6px;pointer-events:none;white-space:pre;"></pre>
 
