@@ -124,12 +124,6 @@
   <button type="button" id="install-x" aria-label="Dismiss">&times;</button>
 </div>
 
-<!-- Temporary — diagnosing the top/bottom gap on notched iPhones. Screenshot
-     this box, then this whole block gets removed once it's fixed. -->
-<pre id="debug" style="position:fixed;top:max(env(safe-area-inset-top), 59px);left:4px;z-index:9999;margin:4px 0 0;
-  padding:6px 8px;background:rgba(0,0,0,.75);color:#7fffa0;font:9px/1.4 ui-monospace,monospace;
-  border-radius:6px;pointer-events:none;white-space:pre;"></pre>
-
 <script>
 (function () {
   "use strict";
@@ -247,30 +241,6 @@
       try { localStorage.setItem("atlas.installHint", "off"); } catch (e) {}
     });
   }
-
-  /* ---------- temporary debug readout ---------- */
-  (function () {
-    var probe = document.createElement("div");
-    probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;" +
-      "padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);" +
-      "padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left);";
-    document.body.appendChild(probe);
-    var cs = getComputedStyle(probe);
-    var safe = { top: cs.paddingTop, right: cs.paddingRight, bottom: cs.paddingBottom, left: cs.paddingLeft };
-    probe.remove();
-
-    var stageRect = stage.getBoundingClientRect();
-    var tabsRect = tabsEl.getBoundingClientRect();
-
-    document.getElementById("debug").textContent =
-      "standalone: " + standalone + "\n" +
-      "innerWH: " + window.innerWidth + "x" + window.innerHeight + "\n" +
-      "visualVP: " + (window.visualViewport ? Math.round(visualViewport.width) + "x" + Math.round(visualViewport.height) : "n/a") + "\n" +
-      "dpr: " + window.devicePixelRatio + "\n" +
-      "safe-area TRBL: " + safe.top + " " + safe.right + " " + safe.bottom + " " + safe.left + "\n" +
-      "#stage top/bot: " + Math.round(stageRect.top) + " / " + Math.round(window.innerHeight - stageRect.bottom) + "\n" +
-      "#tabs top/bot: " + Math.round(tabsRect.top) + " / " + Math.round(window.innerHeight - tabsRect.bottom);
-  })();
 
   /* ---------- boot ---------- */
   var start = "live";
