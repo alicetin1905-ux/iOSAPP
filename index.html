@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ATLAS Suite</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#070a0f">
+
+<!-- iOS home-screen app: no Safari chrome, dark status bar over our own background -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ATLAS">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+
+<style>
+  :root{
+    --bg:#070a0f;
+    --bar:#0a0e15;
+    --border:#1b2230;
+    --dim:#6b7787;
+    --live:#29d999;
+    --atlas:#4d9eff;
+    --crucible:#fa6657;
+    --fibo:#f0ba0a;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; height:100%; overflow:hidden;
+    background:var(--bg); color:#e8edf4;
+    font:500 13px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+
+  /* Board area: everything above the tab bar. */
+  #stage{
+    position:fixed; inset:0;
+    bottom:calc(54px + env(safe-area-inset-bottom));
+  }
+  #stage iframe{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    border:0; background:var(--bg);
+  }
+  #stage iframe[hidden]{ display:none; }
+
+  #spinner{
+    position:absolute; left:50%; top:50%;
+    width:26px; height:26px; margin:-13px 0 0 -13px;
+    border:2px solid #223; border-top-color:var(--dim);
+    border-radius:50%; animation:spin .7s linear infinite;
+  }
+  #spinner[hidden]{ display:none; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* Tab bar */
+  #tabs{
+    position:fixed; left:0; right:0; bottom:0;
+    height:calc(54px + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    display:flex; align-items:stretch;
+    background:var(--bar);
+    border-top:1px solid var(--border);
+  }
+  #tabs button{
+    flex:1; min-width:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    background:none; border:0; padding:0;
+    color:var(--dim); font:inherit; font-size:9px; letter-spacing:.09em;
+    text-transform:uppercase; cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .15s ease;
+  }
+  #tabs button svg{ width:21px; height:21px; stroke:currentColor; fill:none;
+    stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  #tabs button[aria-selected="true"]{ color:var(--tint); }
+  #tabs button span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+
+  /* Shown only in a browser tab, never once installed. */
+  #install{
+    position:fixed; left:10px; right:10px;
+    bottom:calc(62px + env(safe-area-inset-bottom));
+    background:#131a25; border:1px solid var(--border); border-radius:10px;
+    padding:11px 13px; display:flex; align-items:center; gap:10px;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);
+  }
+  #install[hidden]{ display:none; }
+  #install p{ margin:0; flex:1; font-size:12px; color:#c3ccd8; font-weight:500; }
+  #install b{ color:#fff; }
+  #install button{
+    background:none; border:0; color:var(--dim);
+    font:inherit; font-size:18px; line-height:1; padding:4px 2px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"><div id="spinner"></div></div>
+
+<nav id="tabs" role="tablist"></nav>
+
+<div id="install" hidden>
+  <p>Tap <b>Share → Add to Home Screen</b> for full screen and alerts.</p>
+  <button type="button" id="install-x" aria-label="Dismiss">&times;</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var TABS = [
+    { id:"live",     label:"Live",     path:"/BTCLiveBoard/", tint:"var(--live)",
+      icon:'<path d="M3 12h3.5l2-5.5L12 17l2-5h4"/>' },
+    { id:"atlas",    label:"ATLAS",    path:"/ATLAS/",        tint:"var(--atlas)",
+      icon:'<rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/>' },
+    { id:"crucible", label:"Crucible", path:"/CRUCIBLE/",     tint:"var(--crucible)",
+      icon:'<path d="M12 2.5c1.8 3.6 4.8 5 4.8 9a4.8 4.8 0 0 1-9.6 0c0-2 .9-3.2 1.9-4.2.1 1.9.9 2.9 1.9 2.9 0-2.9.5-5.4 1-7.7z"/>' },
+    { id:"fibo",     label:"Fibo",     path:"/GoldenRatio/",  tint:"var(--fibo)",
+      icon:'<path d="M3 17.5l5.5-5.5 3.5 3 6.5-7.5"/><path d="M14.5 7.5h4v4"/>' }
+  ];
+
+  var stage   = document.getElementById("stage");
+  var spinner = document.getElementById("spinner");
+  var tabsEl  = document.getElementById("tabs");
+
+  var frames = {};   // id -> iframe, created on first visit and then kept
+  var active = null;
+
+  /* ---------- tab bar ---------- */
+  TABS.forEach(function (t) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", "false");
+    b.style.setProperty("--tint", t.tint);
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + "</svg><span>" + t.label + "</span>";
+    b.addEventListener("click", function () { select(t.id); });
+    tabsEl.appendChild(b);
+    t.button = b;
+  });
+
+  function tabById(id) {
+    for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === id) return TABS[i]; }
+    return null;
+  }
+
+  /* Each board is loaded once and then left running, so CRUCIBLE's sockets and
+     the live board's tape survive tab switches. */
+  function select(id) {
+    if (id === active) { reload(id); return; }
+
+    var t = tabById(id);
+    if (!t) return;
+
+    TABS.forEach(function (o) {
+      o.button.setAttribute("aria-selected", String(o.id === id));
+      if (frames[o.id]) frames[o.id].hidden = (o.id !== id);
+    });
+
+    active = id;
+    try { localStorage.setItem("atlas.tab", id); } catch (e) {}
+
+    if (!frames[id]) {
+      spinner.hidden = false;
+      var f = document.createElement("iframe");
+      f.src = t.path;
+      f.title = t.label;
+      f.allow = "autoplay; fullscreen";
+      f.addEventListener("load", function () { spinner.hidden = true; });
+      stage.appendChild(f);
+      frames[id] = f;
+    } else {
+      spinner.hidden = true;
+    }
+
+    updateWakeLock();
+  }
+
+  /* Tapping the tab you are already on reloads that board — handy right after
+     pushing a change to its repo. */
+  function reload(id) {
+    var f = frames[id];
+    if (!f) return;
+    spinner.hidden = false;
+    f.src = f.src;
+  }
+
+  /* ---------- keep the screen awake on the live board ---------- */
+  var wakeLock = null;
+
+  function updateWakeLock() {
+    var want = active === "live" && document.visibilityState === "visible";
+    if (!("wakeLock" in navigator)) return;
+
+    if (want && !wakeLock) {
+      navigator.wakeLock.request("screen").then(function (lock) {
+        wakeLock = lock;
+        lock.addEventListener("release", function () { wakeLock = null; });
+      }).catch(function () { /* denied, low battery, or unsupported */ });
+    } else if (!want && wakeLock) {
+      wakeLock.release().catch(function () {});
+      wakeLock = null;
+    }
+  }
+
+  // iOS drops the lock whenever the app is hidden; take it again on return.
+  document.addEventListener("visibilitychange", updateWakeLock);
+
+  /* ---------- install hint (browser tab only) ---------- */
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
+  var dismissed = false;
+  try { dismissed = localStorage.getItem("atlas.installHint") === "off"; } catch (e) {}
+
+  if (!standalone && !dismissed) {
+    var hint = document.getElementById("install");
+    hint.hidden = false;
+    document.getElementById("install-x").addEventListener("click", function () {
+      hint.hidden = true;
+      try { localStorage.setItem("atlas.installHint", "off"); } catch (e) {}
+    });
+  }
+
+  /* ---------- boot ---------- */
+  var start = "live";
+  try {
+    var saved = localStorage.getItem("atlas.tab");
+    if (saved && tabById(saved)) start = saved;
+  } catch (e) {}
+  select(start);
+})();
+</script>
+</body>
+</html>
