@@ -280,6 +280,18 @@
   // iOS drops the lock whenever the app is hidden; take it again on return.
   document.addEventListener("visibilitychange", updateWakeLock);
 
+  /* ATLAS's own notification tap already switches its internal symbol and
+     timeframe by itself, inside its iframe — this just brings that tab into
+     view if some other tab was showing when the notification fired. Guarded
+     against id === active so it can never trigger select()'s own reload
+     path, which would otherwise wipe out the very state ATLAS just set. */
+  window.addEventListener("message", function (e) {
+    if (e.origin !== location.origin) return;
+    if (e.data && e.data.type === "atlas-goto" && active !== "atlas") {
+      select("atlas");
+    }
+  });
+
   /* ---------- install hint (browser tab only) ---------- */
   var standalone = window.navigator.standalone === true ||
     (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
