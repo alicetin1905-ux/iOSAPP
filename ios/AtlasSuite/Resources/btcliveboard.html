@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Live Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #070a09;
+    --surface: #0e1412;
+    --surface-2: #121a17;
+    --border: #1b2320;
+    --text-primary: #eef4f0;
+    --text-secondary: #7c8f87;
+    --text-tertiary: #4a5852;
+    --up: #35ffb0;
+    --down: #ff4d6a;
+    --flat: #ffc857;
+    --signal: #ffc857;
+    --signal-soft: rgba(255,200,87,0.09);
+    --u: min(1vw, 1.9vh);   /* layout unit: scales with the screen, guarded by height */
+    --mono: 'JetBrains Mono','SF Mono',Consolas,monospace;
+    --sans: 'Inter',system-ui,sans-serif;
+  }
+
+  body.state-long{ --signal: #35ffb0; --signal-soft: rgba(53,255,176,0.10); }
+  body.state-short{ --signal: #ff4d6a; --signal-soft: rgba(255,77,106,0.10); }
+  body.state-flat{ --signal: #ffc857; --signal-soft: rgba(255,200,87,0.08); }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+
+  body{
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: max(12px, calc(var(--u) * 1.8)) max(16px, calc(var(--u) * 2.6));
+    position: relative;
+  }
+
+  /* ambient wash — the whole screen carries the regime colour */
+  .wash{
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 130% 80% at 50% -10%, var(--signal-soft), transparent 60%),
+      radial-gradient(ellipse 120% 70% at 50% 110%, var(--signal-soft), transparent 62%);
+    transition: background 1.4s ease;
+  }
+  .scanlines{
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px);
+  }
+
+  .layer{ position: relative; z-index: 1; }
+
+  /* ---------------- top bar ---------------- */
+  .topbar{
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+    padding-bottom: max(8px, calc(var(--u) * 1.2));
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-left{ display: flex; align-items: baseline; gap: max(8px, calc(var(--u) * 1.2)); flex-wrap: wrap; }
+  .pair-symbol{
+    font-family: var(--mono); font-weight: 700;
+    font-size: max(14px, calc(var(--u) * 1.5)); letter-spacing: 0.03em;
+  }
+  .pair-venue, .ce-badge{
+    font-size: max(9px, calc(var(--u) * 0.82)); letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-tertiary);
+  }
+  .ce-badge{
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 8px; color: var(--text-secondary);
+    font-family: var(--mono); letter-spacing: 0.08em;
+  }
+  .topbar-right{ display: flex; align-items: center; gap: max(12px, calc(var(--u) * 1.8)); }
+
+  .sound-toggle{
+    background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary);
+    font-family: var(--sans); font-size: max(9px, calc(var(--u) * 0.82));
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 5px 11px; border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; gap: 7px;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .sound-toggle:hover{ color: var(--text-primary); border-color: var(--text-tertiary); }
+  .sound-toggle:focus-visible{ outline: 2px solid var(--signal); outline-offset: 2px; }
+  .sound-toggle.on{ color: var(--signal); border-color: color-mix(in srgb, var(--signal) 45%, var(--border)); }
+  .speaker{ width: 11px; height: 11px; display: block; }
+
+  .status{
+    display: flex; align-items: center; gap: 8px;
+    font-size: max(9px, calc(var(--u) * 0.82)); letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-secondary);
+  }
+  .status-dot{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--flat); transition: background 0.3s ease;
+  }
+  .status-dot.live{ background: var(--up); animation: pulse 2.2s ease-in-out infinite; }
+  .status-dot.down{ background: var(--down); }
+  @keyframes pulse{
+    0%,100%{ box-shadow: 0 0 0 0 rgba(53,255,176,0.45); }
+    50%{ box-shadow: 0 0 0 6px rgba(53,255,176,0); }
+  }
+  .clock{
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: max(12px, calc(var(--u) * 1.25)); color: var(--text-secondary);
+  }
+
+  /* ---------------- centre ---------------- */
+  .center{
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: max(6px, calc(var(--u) * 1)); text-align: center; min-height: 0;
+  }
+
+  .hero-label{
+    display: flex; align-items: center; gap: 10px;
+    font-size: max(10px, calc(var(--u) * 0.9)); letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--text-tertiary);
+  }
+
+  /* ---------- split-flap board ----------
+     Each card is two overflow-hidden halves showing the top and bottom of the
+     same glyph, plus two hinged leaves that fold over them on a change. */
+  .price{
+    display: flex; align-items: flex-start; justify-content: center;
+    gap: 0.055em;
+    font-family: var(--mono); font-weight: 700;
+    font-size: max(40px, calc(var(--u) * 12)); line-height: 1;   /* JS fits this to the screen */
+    transition: opacity 0.4s ease;
+  }
+  .price.stale{ opacity: 0.35; }
+
+  .flap{
+    position: relative; flex: none;
+    width: 0.74em; height: 1.2em;   /* card is taller than the glyph, so the
+                                       numeral sits with air above and below */
+    border-radius: 0.075em;
+    perspective: 2.6em;
+    background: #10151a;
+    box-shadow: 0 0.035em 0.07em rgba(0,0,0,0.65), inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  /* hinge pins at the fold line */
+  .flap::before, .flap::after{
+    content: ''; position: absolute; top: calc(50% - 0.04em); z-index: 6;
+    width: 0.045em; height: 0.08em; background: #04070a; border-radius: 0.02em;
+  }
+  .flap::before{ left: -0.012em; }
+  .flap::after{ right: -0.012em; }
+
+  .flap .face{
+    position: absolute; left: 0; right: 0; height: 50%;
+    overflow: hidden; display: flex; justify-content: center;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+  .flap .face span{
+    display: block; height: 1.2em; line-height: 1.2em;
+    color: #f1eade;                       /* warm cream numerals */
+    text-shadow: 0 0.012em 0.02em rgba(0,0,0,0.5);
+  }
+  .flap .face.top{
+    top: 0; align-items: flex-start;
+    border-radius: 0.075em 0.075em 0 0;
+    background: linear-gradient(to bottom, #1c222a, #131920);
+    border-bottom: 1px solid rgba(0,0,0,0.7);
+  }
+  .flap .face.bottom{
+    bottom: 0; align-items: flex-end;
+    border-radius: 0 0 0.075em 0.075em;
+    background: linear-gradient(to bottom, #0d1217, #181e25);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .flap .fold-top{ z-index: 4; transform-origin: bottom; visibility: hidden; }
+  .flap .fold-bottom{ z-index: 4; transform-origin: top; visibility: hidden; transform: rotateX(90deg); }
+  .flap.flipping .fold-top{ visibility: visible; animation: foldTop 0.1s ease-in forwards; }
+  .flap.flipping .fold-bottom{ visibility: visible; animation: foldBottom 0.1s 0.1s ease-out forwards; }
+  @keyframes foldTop{ from{ transform: rotateX(0deg); } to{ transform: rotateX(-90deg); } }
+  @keyframes foldBottom{ from{ transform: rotateX(90deg); } to{ transform: rotateX(0deg); } }
+
+  .flap-punct{
+    display: flex; align-items: flex-end; height: 1.2em; flex: none;
+    color: #6d7a73; padding: 0 0.015em;
+  }
+  /* the fractional group rides as a smaller sub-board, the way a Solari
+     board sets its seconds */
+  .price .small{ font-size: 0.5em; align-self: flex-end; }
+
+  .change-row{ display: flex; align-items: center; gap: max(8px, calc(var(--u) * 1.2)); flex-wrap: wrap; justify-content: center; }
+  .change-pill{
+    font-family: var(--mono); font-weight: 700; font-variant-numeric: tabular-nums;
+    font-size: max(14px, calc(var(--u) * 1.7)); padding: 0.26em 0.68em;
+    border-radius: 100px; border: 1px solid var(--border); background: var(--surface);
+  }
+  .change-pill.up{ color: var(--up); border-color: rgba(53,255,176,0.4); background: rgba(53,255,176,0.07); }
+  .change-pill.down{ color: var(--down); border-color: rgba(255,77,106,0.4); background: rgba(255,77,106,0.07); }
+  .change-abs{
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: max(12px, calc(var(--u) * 1.2)); color: var(--text-secondary);
+  }
+
+  /* ---------------- signal block ---------------- */
+  .signal-block{
+    margin-top: max(6px, calc(var(--u) * 1));
+    width: min(calc(var(--u) * 62), 92%);
+    border: 1px solid color-mix(in srgb, var(--signal) 30%, var(--border));
+    background: linear-gradient(to bottom, var(--signal-soft), transparent);
+    border-radius: 10px;
+    padding: max(10px, calc(var(--u) * 1.3)) max(14px, calc(var(--u) * 1.8));
+    display: flex; flex-direction: column; gap: max(8px, calc(var(--u) * 1));
+    transition: border-color 1.2s ease, background 1.2s ease;
+  }
+  .signal-head{ display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .signal-name{
+    display: flex; align-items: center; gap: 11px;
+    font-family: var(--mono); font-weight: 800;
+    font-size: max(20px, calc(var(--u) * 2.6)); letter-spacing: 0.06em;
+    color: var(--signal); transition: color 1.2s ease;
+  }
+  .led{
+    width: max(11px, calc(var(--u) * 1.15)); height: max(11px, calc(var(--u) * 1.15));
+    border-radius: 50%; background: var(--signal);
+    box-shadow: 0 0 16px var(--signal), 0 0 40px var(--signal-soft);
+    animation: led 2.6s ease-in-out infinite;
+  }
+  @keyframes led{ 0%,100%{ opacity: 1; } 50%{ opacity: 0.45; } }
+  .signal-meta{
+    font-family: var(--mono); font-size: max(10px, calc(var(--u) * 1));
+    color: var(--text-secondary); font-variant-numeric: tabular-nums;
+    text-align: right; line-height: 1.5;
+  }
+  .filter-chip{
+    display: inline-block; font-family: var(--sans);
+    font-size: max(8px, calc(var(--u) * 0.75)); letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+    color: var(--text-tertiary);
+  }
+  .filter-chip.aligned{ color: var(--up); border-color: rgba(53,255,176,0.35); background: rgba(53,255,176,0.06); }
+  .filter-chip.against{ color: var(--flat); border-color: rgba(255,200,87,0.35); background: rgba(255,200,87,0.06); }
+
+  /* distance-to-stop rail */
+  .stop-rail{ display: flex; flex-direction: column; gap: 6px; }
+  .stop-labels{
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: max(9px, calc(var(--u) * 0.85));
+    color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+  .stop-labels strong{ color: var(--text-secondary); font-weight: 500; }
+  .rail-track{
+    height: 7px; border-radius: 100px; background: var(--surface-2);
+    overflow: hidden; border: 1px solid var(--border);
+  }
+  .rail-fill{
+    height: 100%; width: 0%; border-radius: 100px;
+    background: var(--signal);
+    transition: width 0.5s ease, background 0.5s ease;
+  }
+  .rail-fill.near{ background: var(--flat); }
+  .rail-fill.imminent{ background: var(--down); animation: railWarn 1s ease-in-out infinite; }
+  @keyframes railWarn{ 0%,100%{ opacity: 1; } 50%{ opacity: 0.4; } }
+
+  /* ---------------- tiles ---------------- */
+  .tiles{
+    display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: max(8px, calc(var(--u) * 1.1));
+    padding-top: max(10px, calc(var(--u) * 1.4));
+  }
+  .tile{
+    display: flex; flex-direction: column; gap: 5px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--tile-signal, var(--text-tertiary));
+    border-radius: 8px;
+    padding: max(8px, calc(var(--u) * 1)) max(10px, calc(var(--u) * 1.2));
+    min-width: 0; cursor: pointer; text-align: left;
+    font-family: inherit; color: inherit;
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+  .tile:hover{ background: var(--surface-2); transform: translateY(-2px); }
+  .tile:focus-visible{ outline: 2px solid var(--signal); outline-offset: 2px; }
+  .tile-top{ display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tile-sym{
+    font-family: var(--mono); font-weight: 700;
+    font-size: max(11px, calc(var(--u) * 1.05)); letter-spacing: 0.05em;
+  }
+  .tile-state{
+    font-size: max(8px, calc(var(--u) * 0.7)); letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--tile-signal, var(--text-tertiary)); font-weight: 600;
+  }
+  .tile-price{
+    font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums;
+    font-size: max(15px, calc(var(--u) * 1.75));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tile-change{
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: max(10px, calc(var(--u) * 0.95)); color: var(--text-secondary);
+  }
+  .tile-change.up{ color: var(--up); }
+  .tile-change.down{ color: var(--down); }
+
+  /* ---------------- footer ---------------- */
+  .footer{
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    padding-top: max(8px, calc(var(--u) * 1.1)); margin-top: max(8px, calc(var(--u) * 1.1));
+    border-top: 1px solid var(--border);
+    font-size: max(9px, calc(var(--u) * 0.8)); color: var(--text-tertiary);
+    letter-spacing: 0.06em;
+  }
+  .countdown{
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    color: var(--text-secondary); letter-spacing: 0.04em;
+  }
+  .countdown.closing{ color: var(--signal); animation: led 1s ease-in-out infinite; }
+  .hint{ font-family: var(--mono); }
+
+  /* ---------------- flip takeover ---------------- */
+  .takeover{
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; pointer-events: none; opacity: 0; visibility: hidden;
+    background:
+      radial-gradient(ellipse 85% 65% at 50% 50%, var(--takeover-soft, rgba(53,255,176,0.22)), transparent 68%),
+      rgba(6,9,8,0.972);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+  }
+  .takeover.show{ animation: takeover 3.4s ease-out forwards; visibility: visible; }
+  @keyframes takeover{
+    0%{ opacity: 0; }
+    8%{ opacity: 1; }
+    78%{ opacity: 1; }
+    100%{ opacity: 0; visibility: hidden; }
+  }
+  .takeover-word{
+    font-family: var(--mono); font-weight: 800;
+    font-size: max(56px, calc(var(--u) * 13)); line-height: 1; letter-spacing: 0.04em;
+    color: var(--takeover-color, var(--up));
+    text-shadow: 0 0 60px var(--takeover-soft, rgba(53,255,176,0.4));
+  }
+  .takeover.show .takeover-word{ animation: wordIn 0.7s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes wordIn{ 0%{ transform: scale(0.86); opacity: 0; } 100%{ transform: scale(1); opacity: 1; } }
+  .takeover-sub{
+    font-family: var(--mono); font-size: max(13px, calc(var(--u) * 1.7));
+    color: var(--text-primary); letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .takeover-time{
+    font-family: var(--sans); font-size: max(9px, calc(var(--u) * 0.85));
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-secondary);
+  }
+
+  .error-note{
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    z-index: 60; background: var(--surface); border: 1px solid var(--down);
+    color: var(--down); font-family: var(--mono); font-size: 12px;
+    padding: 8px 14px; border-radius: 6px; display: none;
+  }
+  .error-note.show{ display: block; }
+
+  @media (max-width: 700px){
+    .tiles{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .signal-block{ width: 100%; }
+    .signal-meta{ text-align: left; }
+    .price{ font-size: max(40px, calc(var(--u) * 14)); }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .takeover.show{ visibility: visible; opacity: 1; }
+  }
+</style>
+</head>
+<body class="state-flat">
+
+<div class="wash"></div>
+<div class="scanlines"></div>
+
+<div class="topbar layer">
+  <div class="topbar-left">
+    <span class="pair-symbol" id="heroPair">BTC/USDT</span>
+    <span class="pair-venue">Bybit &middot; Perpetual</span>
+    <span class="ce-badge">CE 4/2 &middot; 1H &middot; closed candles</span>
+  </div>
+  <div class="topbar-right">
+    <button class="sound-toggle" id="soundToggle" aria-pressed="false" title="Toggle sound (S)">
+      <svg class="speaker" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+        <path d="M7 2.5 3.8 5.2H1.5v5.6h2.3L7 13.5z"/>
+        <path id="waveOn" d="M9.6 5.4a3.4 3.4 0 0 1 0 5.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path id="waveOff" d="M10 6 13.5 10M13.5 6 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      <span id="soundLabel">Sound off</span>
+    </button>
+    <div class="status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Connecting</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<div class="center layer">
+  <div class="hero-label"><span id="heroLabelText">Last price (USDT)</span></div>
+
+  <div class="price" id="price"></div>
+
+  <div class="change-row">
+    <div class="change-pill" id="changePct">&mdash;</div>
+    <div class="change-abs" id="changeAbs">24h change</div>
+  </div>
+
+  <div class="signal-block">
+    <div class="signal-head">
+      <div class="signal-name"><span class="led" id="led"></span><span id="signalName">WAITING</span></div>
+      <div class="signal-meta">
+        <div id="signalSince">loading 1H history&hellip;</div>
+        <div><span class="filter-chip" id="filterChip">EMA200 &mdash;</span></div>
+      </div>
+    </div>
+    <div class="stop-rail">
+      <div class="stop-labels">
+        <span>Chandelier stop <strong id="stopPrice">&mdash;</strong></span>
+        <span><strong id="stopDistance">&mdash;</strong> room before flip</span>
+      </div>
+      <div class="rail-track"><div class="rail-fill" id="railFill"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="tiles layer" id="tiles"></div>
+
+<div class="footer layer">
+  <div class="hint">Tap a tile to promote</div>
+  <div class="countdown" id="countdown">1H close in --:--</div>
+  <div id="sourceNote">Bybit V5 public API &middot; connecting&hellip;</div>
+</div>
+
+<div class="takeover" id="takeover" aria-hidden="true">
+  <div class="takeover-time" id="takeoverTime"></div>
+  <div class="takeover-word" id="takeoverWord">LONG</div>
+  <div class="takeover-sub" id="takeoverSub"></div>
+</div>
+
+<div class="error-note" id="errorNote"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     Config
+     ============================================================ */
+  var CE_LENGTH = 4;        // Chandelier Exit ATR period
+  var CE_MULT = 2;          // Chandelier Exit ATR multiplier
+  var EMA_LENGTH = 200;     // trend filter
+  var INTERVAL = '60';      // 1H
+  var CANDLE_MS = 3600000;
+  var REST_BASE = 'https://api.bybit.com/v5/market/kline';
+  var WS_URL = 'wss://stream.bybit.com/v5/public/linear';
+  var STALE_MS = 12000;
+
+  var SYMBOLS = [
+    { sym: 'BTCUSDT',  label: 'BTC',  decimals: 1 },
+    { sym: 'ETHUSDT',  label: 'ETH',  decimals: 2 },
+    { sym: 'SOLUSDT',  label: 'SOL',  decimals: 2 },
+    { sym: 'XRPUSDT',  label: 'XRP',  decimals: 4 },
+    { sym: 'DOGEUSDT', label: 'DOGE', decimals: 5 }
+  ];
+
+  var heroSymbol = 'BTCUSDT';
+  var state = {};           // per-symbol: ticker, candles, ce, ema200, live candle
+  var ws = null;
+  var reconnectDelay = 1000;
+  var pingTimer = null;
+  var soundOn = false;
+  var audioCtx = null;
+  var historyReady = false; // suppresses the takeover on first load
+  var lastTickerTs = 0;
+  var lastHeroPrice = null;
+  var lastPriceString = '';
+
+  SYMBOLS.forEach(function(s){
+    state[s.sym] = {
+      meta: s, ticker: {}, candles: [], live: null,
+      ce: null, ema200: NaN, dir: 0, prevDir: 0,
+      flipIndex: -1, flipPrice: NaN, flipTime: 0
+    };
+  });
+
+  /* ============================================================
+     Indicators — Chandelier Exit (Everget) + EMA
+     Verified against a Node reference: ATR/RMA parity, stop-ratchet
+     invariants, and non-repainting across prefix cuts.
+     ============================================================ */
+  function trueRange(candles){
+    var tr = [];
+    for (var i = 0; i < candles.length; i++){
+      var c = candles[i];
+      if (i === 0){ tr.push(c.high - c.low); }
+      else {
+        var pc = candles[i-1].close;
+        tr.push(Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc)));
+      }
+    }
+    return tr;
+  }
+
+  function rma(values, length){
+    var out = new Array(values.length).fill(NaN);
+    if (values.length < length) return out;
+    var sum = 0;
+    for (var i = 0; i < length; i++) sum += values[i];
+    out[length-1] = sum / length;
+    for (var j = length; j < values.length; j++){
+      out[j] = (out[j-1] * (length - 1) + values[j]) / length;
+    }
+    return out;
+  }
+
+  function ema(values, length){
+    var out = new Array(values.length).fill(NaN);
+    if (values.length < length) return out;
+    var alpha = 2 / (length + 1);
+    var sum = 0;
+    for (var i = 0; i < length; i++) sum += values[i];
+    out[length-1] = sum / length;
+    for (var j = length; j < values.length; j++){
+      out[j] = alpha * values[j] + (1 - alpha) * out[j-1];
+    }
+    return out;
+  }
+
+  function chandelierExit(candles, length, mult){
+    var n = candles.length;
+    var atrRaw = rma(trueRange(candles), length);
+    var longStop = new Array(n).fill(NaN);
+    var shortStop = new Array(n).fill(NaN);
+    var dir = new Array(n).fill(1);
+
+    for (var i = 0; i < n; i++){
+      if (isNaN(atrRaw[i]) || i < length - 1){ dir[i] = 1; continue; }
+      var atr = mult * atrRaw[i];
+
+      var highestClose = -Infinity, lowestClose = Infinity;
+      for (var k = i - length + 1; k <= i; k++){
+        if (candles[k].close > highestClose) highestClose = candles[k].close;
+        if (candles[k].close < lowestClose) lowestClose = candles[k].close;
+      }
+
+      var ls = highestClose - atr;
+      var lsPrev = isNaN(longStop[i-1]) ? ls : longStop[i-1];
+      if (i > 0 && candles[i-1].close > lsPrev) ls = Math.max(ls, lsPrev);
+      longStop[i] = ls;
+
+      var ss = lowestClose + atr;
+      var ssPrev = isNaN(shortStop[i-1]) ? ss : shortStop[i-1];
+      if (i > 0 && candles[i-1].close < ssPrev) ss = Math.min(ss, ssPrev);
+      shortStop[i] = ss;
+
+      var prevDir = i > 0 ? dir[i-1] : 1;
+      if (candles[i].close > ssPrev) dir[i] = 1;
+      else if (candles[i].close < lsPrev) dir[i] = -1;
+      else dir[i] = prevDir;
+    }
+    return { longStop: longStop, shortStop: shortStop, dir: dir, atr: atrRaw };
+  }
+
+  // exposed for the automated parity test; harmless in normal use
+  window.__CE__ = { chandelierExit: chandelierExit, ema: ema, rma: rma, trueRange: trueRange, state: state };
+
+  /* ============================================================
+     Formatting
+     ============================================================ */
+  function fmt(n, decimals){
+    if (n === null || n === undefined || isNaN(n)) return null;
+    return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+  function fmtCompact(n){
+    if (n === null || n === undefined || isNaN(n)) return null;
+    return Number(n).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+  }
+  function pad(n){ return String(n).padStart(2, '0'); }
+
+  /* ============================================================
+     Audio — synthesised, no assets
+     ============================================================ */
+  function ensureAudio(){
+    if (!audioCtx){
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function tone(freq, startAt, duration, gainPeak, type){
+    var ctx = audioCtx;
+    if (!ctx) return;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, startAt);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(gainPeak, startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + duration + 0.05);
+  }
+
+  function playFlip(direction){
+    if (!soundOn || !ensureAudio()) return;
+    var t = audioCtx.currentTime;
+    if (direction === 1){           // long — rising
+      tone(523.25, t, 0.26, 0.16);
+      tone(783.99, t + 0.17, 0.5, 0.16);
+    } else {                        // short — falling
+      tone(659.25, t, 0.26, 0.16);
+      tone(415.30, t + 0.17, 0.6, 0.16);
+    }
+  }
+
+  function playCandleClose(){
+    if (!soundOn || !ensureAudio()) return;
+    tone(220, audioCtx.currentTime, 0.12, 0.05, 'triangle');
+  }
+
+  // the mechanical clack of a card landing — a short noise burst, band-passed
+  var noiseBuf = null;
+  function getNoise(){
+    if (!audioCtx) return null;
+    if (!noiseBuf){
+      var len = Math.floor(audioCtx.sampleRate * 0.045);
+      noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < len; i++){
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      }
+    }
+    return noiseBuf;
+  }
+
+  function playFlap(){
+    if (!soundOn || !ensureAudio()) return;
+    var buf = getNoise();
+    if (!buf) return;
+    var src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    var bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1750; bp.Q.value = 1.2;
+    var g = audioCtx.createGain();
+    g.gain.value = 0.055;
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start();
+  }
+
+  /* ============================================================
+     DOM
+     ============================================================ */
+  var els = {
+    heroPair: document.getElementById('heroPair'),
+    heroLabelText: document.getElementById('heroLabelText'),
+    price: document.getElementById('price'),
+    changePct: document.getElementById('changePct'),
+    changeAbs: document.getElementById('changeAbs'),
+    signalName: document.getElementById('signalName'),
+    signalSince: document.getElementById('signalSince'),
+    filterChip: document.getElementById('filterChip'),
+    stopPrice: document.getElementById('stopPrice'),
+    stopDistance: document.getElementById('stopDistance'),
+    railFill: document.getElementById('railFill'),
+    tiles: document.getElementById('tiles'),
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    clock: document.getElementById('clock'),
+    countdown: document.getElementById('countdown'),
+    sourceNote: document.getElementById('sourceNote'),
+    soundToggle: document.getElementById('soundToggle'),
+    soundLabel: document.getElementById('soundLabel'),
+    waveOn: document.getElementById('waveOn'),
+    waveOff: document.getElementById('waveOff'),
+    takeover: document.getElementById('takeover'),
+    takeoverWord: document.getElementById('takeoverWord'),
+    takeoverSub: document.getElementById('takeoverSub'),
+    takeoverTime: document.getElementById('takeoverTime'),
+    errorNote: document.getElementById('errorNote')
+  };
+
+  function setStatus(mode){
+    els.statusDot.className = 'status-dot' + (mode === 'live' ? ' live' : mode === 'offline' ? ' down' : '');
+    els.statusText.textContent = mode === 'live' ? 'Live' : mode === 'offline' ? 'Reconnecting' : mode === 'stale' ? 'Stale' : 'Connecting';
+  }
+
+  function showError(msg){
+    els.errorNote.textContent = msg;
+    els.errorNote.classList.add('show');
+  }
+  function clearError(){ els.errorNote.classList.remove('show'); }
+
+  /* ---------- split-flap board ----------
+     A real flap can only move so fast, so ticks are collected and the board is
+     driven at a fixed cadence instead of once per message. */
+  var FLIP_MS = 200;
+  var BOARD_CADENCE = 150;
+  var lastLayout = '';
+  var pendingPrice = null;
+  var boardTimer = null;
+  var lastBoardUpdate = 0;
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function setPrice(str){
+    pendingPrice = str;
+    if (boardTimer) return;
+    var wait = Math.max(0, BOARD_CADENCE - (Date.now() - lastBoardUpdate));
+    boardTimer = setTimeout(function(){
+      boardTimer = null;
+      lastBoardUpdate = Date.now();
+      applyPrice(pendingPrice);
+    }, wait);
+  }
+
+  function makeFace(cls, ch){
+    var face = document.createElement('div');
+    face.className = 'face ' + cls;
+    var span = document.createElement('span');
+    span.textContent = ch;
+    face.appendChild(span);
+    return face;
+  }
+
+  function makeFlap(ch, small){
+    var flap = document.createElement('div');
+    flap.className = 'flap' + (small ? ' small' : '');
+    var top = makeFace('top', ch);
+    var bottom = makeFace('bottom', ch);
+    var foldTop = makeFace('top fold-top', ch);
+    var foldBottom = makeFace('bottom fold-bottom', ch);
+    flap.appendChild(top);
+    flap.appendChild(bottom);
+    flap.appendChild(foldTop);
+    flap.appendChild(foldBottom);
+    flap.faces = {
+      top: top.firstChild, bottom: bottom.firstChild,
+      foldTop: foldTop.firstChild, foldBottom: foldBottom.firstChild
+    };
+    flap.value = ch;
+    return flap;
+  }
+
+  function flipTo(flap, ch){
+    var f = flap.faces;
+    var old = flap.value;
+    flap.value = ch;
+
+    if (reducedMotion){
+      f.top.textContent = ch; f.bottom.textContent = ch;
+      return;
+    }
+    f.foldTop.textContent = old;    // the leaf that falls away
+    f.foldBottom.textContent = ch;  // the leaf that drops into place
+    f.top.textContent = ch;         // revealed behind the falling leaf
+    f.bottom.textContent = old;     // holds until the new leaf lands
+
+    flap.classList.remove('flipping');
+    void flap.offsetWidth;
+    flap.classList.add('flipping');
+
+    clearTimeout(flap.settleTimer);
+    flap.settleTimer = setTimeout(function(){
+      f.bottom.textContent = ch;
+      flap.classList.remove('flipping');
+    }, FLIP_MS);
+  }
+
+  /* The board is sized to the screen rather than to a fixed ceiling: measure the
+     cards at a known size, then scale so they fill the width they're given. */
+  function fitBoard(){
+    if (!els.price.children.length) return;
+    els.price.style.fontSize = '100px';
+    var natural = els.price.scrollWidth;
+    if (!natural) return;
+    var availW = els.price.parentElement.clientWidth * 0.94;
+    var availH = window.innerHeight * 0.40;
+    var size = Math.min(100 * (availW / natural), availH / 1.2);
+    els.price.style.fontSize = Math.max(28, Math.min(size, 900)).toFixed(1) + 'px';
+  }
+
+  var fitTimer = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(fitBoard, 150);
+  });
+
+  function buildBoard(chars, dotIdx, shrink){
+    els.price.textContent = '';
+    chars.forEach(function(ch, i){
+      var small = shrink && dotIdx !== -1 && i >= dotIdx;
+      if (ch === ',' || ch === '.'){
+        var p = document.createElement('div');
+        p.className = 'flap-punct' + (small ? ' small' : '');
+        p.textContent = ch;
+        els.price.appendChild(p);
+      } else {
+        els.price.appendChild(makeFlap(ch, small));
+      }
+    });
+  }
+
+  function applyPrice(str){
+    if (!str || str === lastPriceString) return;
+    var chars = str.split('');
+    var dotIdx = str.indexOf('.');
+    // On four-figure symbols the decimals are noise from across a room, so they
+    // ride as a smaller sub-board. On XRP/DOGE they carry the move — full size.
+    var intDigits = (dotIdx === -1 ? str : str.slice(0, dotIdx)).replace(/,/g, '').length;
+    var shrink = dotIdx !== -1 && intDigits >= 4;
+
+    var layout = chars.map(function(ch, i){
+      var kind = (ch === ',' || ch === '.') ? ch : 'd';
+      return kind + (shrink && dotIdx !== -1 && i >= dotIdx ? 's' : '');
+    }).join('');
+
+    if (layout !== lastLayout){
+      buildBoard(chars, dotIdx, shrink);
+      fitBoard();
+      lastLayout = layout;
+      lastPriceString = str;
+      return;                       // a fresh board sets itself, nothing to flip
+    }
+
+    var flipped = false;
+    for (var i = 0; i < chars.length; i++){
+      var cell = els.price.children[i];
+      if (!cell || !cell.faces) continue;
+      if (cell.value !== chars[i]){ flipTo(cell, chars[i]); flipped = true; }
+    }
+    lastPriceString = str;
+    if (flipped) playFlap();
+  }
+
+  /* ---------- hero render ---------- */
+  function renderHero(){
+    var st = state[heroSymbol];
+    var t = st.ticker;
+    var dec = st.meta.decimals;
+    var last = parseFloat(t.lastPrice);
+
+    els.heroPair.textContent = st.meta.label + '/USDT';
+    els.heroLabelText.textContent = 'Last price (USDT)';
+
+    if (!isNaN(last)){
+      setPrice(fmt(last, dec));
+      lastHeroPrice = last;
+    }
+
+    var pct = parseFloat(t.price24hPcnt);
+    if (!isNaN(pct)){
+      els.changePct.textContent = (pct >= 0 ? '+' : '') + (pct * 100).toFixed(2) + '%';
+      els.changePct.className = 'change-pill ' + (pct >= 0 ? 'up' : 'down');
+    }
+
+    var prev = parseFloat(t.prevPrice24h);
+    if (!isNaN(prev) && !isNaN(last)){
+      var abs = last - prev;
+      els.changeAbs.textContent = (abs >= 0 ? '+' : '-') + '$' + fmt(Math.abs(abs), dec) +
+        '  ·  H ' + (fmt(parseFloat(t.highPrice24h), dec) || '—') +
+        '  ·  L ' + (fmt(parseFloat(t.lowPrice24h), dec) || '—') +
+        '  ·  Vol ' + (fmtCompact(parseFloat(t.turnover24h)) ? '$' + fmtCompact(parseFloat(t.turnover24h)) : '—');
+    }
+
+    renderSignal(st, last);
+  }
+
+  function renderSignal(st, livePrice){
+    if (!st.ce || !st.candles.length){
+      document.body.className = 'state-flat';
+      return;
+    }
+    var i = st.candles.length - 1;
+    var dir = st.ce.dir[i];
+    var dec = st.meta.decimals;
+    var stop = dir === 1 ? st.ce.longStop[i] : st.ce.shortStop[i];
+
+    document.body.className = dir === 1 ? 'state-long' : 'state-short';
+    els.signalName.textContent = dir === 1 ? 'LONG' : 'SHORT';
+
+    // signal age
+    if (st.flipIndex >= 0){
+      var bars = i - st.flipIndex;
+      var when = new Date(st.candles[st.flipIndex].start);
+      els.signalSince.textContent = 'since ' + pad(when.getHours()) + ':' + pad(when.getMinutes()) +
+        ' · ' + bars + (bars === 1 ? ' candle' : ' candles') +
+        ' · from ' + fmt(st.flipPrice, dec);
+    } else {
+      els.signalSince.textContent = 'no flip in loaded history';
+    }
+
+    // EMA200 filter (HERALD rule: longs above, shorts below)
+    var aligned = !isNaN(st.ema200) && (dir === 1 ? livePrice > st.ema200 : livePrice < st.ema200);
+    els.filterChip.textContent = isNaN(st.ema200) ? 'EMA200 —'
+      : (aligned ? 'EMA200 aligned' : 'EMA200 against');
+    els.filterChip.className = 'filter-chip ' + (isNaN(st.ema200) ? '' : aligned ? 'aligned' : 'against');
+
+    // distance to the stop that would flip the signal
+    els.stopPrice.textContent = fmt(stop, dec);
+    if (!isNaN(livePrice) && !isNaN(stop)){
+      var distPct = Math.abs(livePrice - stop) / livePrice * 100;
+      els.stopDistance.textContent = distPct.toFixed(2) + '%';
+      var roomPct = Math.min(distPct / 3, 1) * 100;   // full rail = 3% of room
+      els.railFill.style.width = roomPct.toFixed(1) + '%';
+      els.railFill.className = 'rail-fill' + (distPct < 0.35 ? ' imminent' : distPct < 0.9 ? ' near' : '');
+    }
+  }
+
+  /* ---------- tiles ---------- */
+  function buildTiles(){
+    els.tiles.textContent = '';
+    SYMBOLS.forEach(function(s){
+      if (s.sym === heroSymbol) return;
+      var st = state[s.sym];
+      var t = st.ticker;
+      var dir = st.ce && st.candles.length ? st.ce.dir[st.candles.length - 1] : 0;
+      var color = dir === 1 ? 'var(--up)' : dir === -1 ? 'var(--down)' : 'var(--text-tertiary)';
+
+      var tile = document.createElement('button');
+      tile.className = 'tile';
+      tile.style.setProperty('--tile-signal', color);
+      tile.setAttribute('data-symbol', s.sym);
+      tile.title = 'Promote ' + s.label;
+
+      var top = document.createElement('div');
+      top.className = 'tile-top';
+      var sym = document.createElement('span');
+      sym.className = 'tile-sym';
+      sym.textContent = s.label;
+      var stateLabel = document.createElement('span');
+      stateLabel.className = 'tile-state';
+      stateLabel.textContent = dir === 1 ? 'Long' : dir === -1 ? 'Short' : '—';
+      top.appendChild(sym); top.appendChild(stateLabel);
+
+      var price = document.createElement('div');
+      price.className = 'tile-price';
+      var lp = parseFloat(t.lastPrice);
+      price.textContent = isNaN(lp) ? '—' : fmt(lp, s.decimals);
+
+      var change = document.createElement('div');
+      var pct = parseFloat(t.price24hPcnt);
+      change.className = 'tile-change' + (isNaN(pct) ? '' : pct >= 0 ? ' up' : ' down');
+      change.textContent = isNaN(pct) ? '24h —' : (pct >= 0 ? '+' : '') + (pct * 100).toFixed(2) + '% 24h';
+
+      tile.appendChild(top); tile.appendChild(price); tile.appendChild(change);
+      tile.addEventListener('click', function(){ promote(s.sym); });
+      els.tiles.appendChild(tile);
+    });
+  }
+
+  function promote(sym){
+    if (sym === heroSymbol) return;
+    heroSymbol = sym;
+    lastHeroPrice = null;
+    lastPriceString = '';
+    lastLayout = '';
+    pendingPrice = null;
+    els.price.textContent = '';
+    buildTiles();
+    renderHero();
+  }
+
+  /* ---------- takeover ---------- */
+  function fireTakeover(sym, dir, price){
+    var meta = state[sym].meta;
+    var color = dir === 1 ? 'var(--up)' : 'var(--down)';
+    var soft = dir === 1 ? 'rgba(53,255,176,0.22)' : 'rgba(255,77,106,0.22)';
+    els.takeover.style.setProperty('--takeover-color', color);
+    els.takeover.style.setProperty('--takeover-soft', soft);
+    els.takeoverWord.textContent = dir === 1 ? 'LONG' : 'SHORT';
+    els.takeoverSub.textContent = meta.label + 'USDT.P  ·  ' + fmt(price, meta.decimals);
+    var now = new Date();
+    els.takeoverTime.textContent = 'Chandelier Exit 4/2 · 1H close · ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+    els.takeover.classList.remove('show');
+    void els.takeover.offsetWidth;
+    els.takeover.classList.add('show');
+    setTimeout(function(){ els.takeover.classList.remove('show'); }, 3500);
+    playFlip(dir);
+  }
+
+  /* ============================================================
+     Indicator recompute
+     ============================================================ */
+  function recompute(sym, announce){
+    var st = state[sym];
+    if (st.candles.length < Math.max(CE_LENGTH + 2, 20)) return;
+
+    var ce = chandelierExit(st.candles, CE_LENGTH, CE_MULT);
+    var closes = st.candles.map(function(c){ return c.close; });
+    var e = ema(closes, EMA_LENGTH);
+
+    st.ce = ce;
+    st.ema200 = e[e.length - 1];
+
+    var last = ce.dir.length - 1;
+    var newDir = ce.dir[last];
+
+    // locate the most recent flip
+    st.flipIndex = -1;
+    for (var i = last; i > 0; i--){
+      if (ce.dir[i] !== ce.dir[i-1]){ st.flipIndex = i; break; }
+    }
+    if (st.flipIndex >= 0){
+      st.flipPrice = st.candles[st.flipIndex].close;
+      st.flipTime = st.candles[st.flipIndex].start;
+    }
+
+    var flipped = st.dir !== 0 && newDir !== st.dir;
+    st.prevDir = st.dir;
+    st.dir = newDir;
+
+    if (flipped && announce && historyReady){
+      fireTakeover(sym, newDir, st.candles[last].close);
+    }
+  }
+
+  /* ============================================================
+     Data — REST history then WebSocket
+     ============================================================ */
+  function loadHistory(sym){
+    var url = REST_BASE + '?category=linear&symbol=' + sym + '&interval=' + INTERVAL + '&limit=1000';
+    return fetch(url)
+      .then(function(r){ return r.json(); })
+      .then(function(json){
+        if (!json.result || !json.result.list) throw new Error('bad kline payload for ' + sym);
+        var rows = json.result.list.slice().reverse();  // Bybit returns newest first
+        var now = Date.now();
+        var candles = [];
+        rows.forEach(function(r){
+          var start = Number(r[0]);
+          if (start + CANDLE_MS > now) return;          // drop the in-progress candle
+          candles.push({
+            start: start,
+            open: parseFloat(r[1]), high: parseFloat(r[2]),
+            low: parseFloat(r[3]), close: parseFloat(r[4])
+          });
+        });
+        state[sym].candles = candles;
+        recompute(sym, false);
+      });
+  }
+
+  function loadAllHistory(){
+    return Promise.all(SYMBOLS.map(function(s){
+      return loadHistory(s.sym).catch(function(err){
+        console.warn('history failed for', s.sym, err);
+      });
+    })).then(function(){
+      historyReady = true;
+      buildTiles();
+      renderHero();
+      var n = state[heroSymbol].candles.length;
+      els.sourceNote.textContent = 'Bybit V5 · ' + n + ' closed 1H candles · CE 4/2 + EMA200';
+    });
+  }
+
+  function applyKline(sym, k){
+    var st = state[sym];
+    var start = Number(k.start);
+    var candle = {
+      start: start,
+      open: parseFloat(k.open), high: parseFloat(k.high),
+      low: parseFloat(k.low), close: parseFloat(k.close)
+    };
+
+    if (k.confirm === true){
+      var lastCandle = st.candles[st.candles.length - 1];
+      if (!lastCandle || start > lastCandle.start){
+        st.candles.push(candle);
+        if (st.candles.length > 1200) st.candles.shift();
+        recompute(sym, true);
+        if (sym === heroSymbol) playCandleClose();
+        buildTiles();
+        renderHero();
+      } else if (lastCandle && start === lastCandle.start){
+        st.candles[st.candles.length - 1] = candle;
+        recompute(sym, true);
+      }
+      st.live = null;
+    } else {
+      st.live = candle;   // display only — never fed to the indicator
+    }
+  }
+
+  function connect(){
+    setStatus('connecting');
+    try { ws = new WebSocket(WS_URL); }
+    catch (e){ scheduleReconnect(); return; }
+
+    ws.onopen = function(){
+      reconnectDelay = 1000;
+      setStatus('live');
+      clearError();
+      var args = [];
+      SYMBOLS.forEach(function(s){
+        args.push('tickers.' + s.sym);
+        args.push('kline.' + INTERVAL + '.' + s.sym);
+      });
+      ws.send(JSON.stringify({ op: 'subscribe', args: args }));
+      clearInterval(pingTimer);
+      pingTimer = setInterval(function(){
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: 'ping' }));
+      }, 18000);
+    };
+
+    ws.onmessage = function(evt){
+      var msg;
+      try { msg = JSON.parse(evt.data); } catch (e){ return; }
+      if (!msg.topic || !msg.data) return;
+
+      if (msg.topic.indexOf('tickers.') === 0){
+        var tsym = msg.topic.slice(8);
+        if (!state[tsym]) return;
+        Object.assign(state[tsym].ticker, msg.data);
+        lastTickerTs = Date.now();
+        setStatus('live');
+        els.price.classList.remove('stale');
+        if (tsym === heroSymbol) renderHero();
+        else updateTile(tsym);
+      } else if (msg.topic.indexOf('kline.') === 0){
+        var ksym = msg.topic.split('.')[2];
+        if (!state[ksym] || !msg.data.length) return;
+        msg.data.forEach(function(k){ applyKline(ksym, k); });
+      }
+    };
+
+    ws.onclose = function(){
+      clearInterval(pingTimer);
+      setStatus('offline');
+      scheduleReconnect();
+    };
+    ws.onerror = function(){ /* onclose handles recovery */ };
+  }
+
+  function updateTile(sym){
+    var tile = els.tiles.querySelector('[data-symbol="' + sym + '"]');
+    if (!tile) return;
+    var st = state[sym];
+    var lp = parseFloat(st.ticker.lastPrice);
+    var pct = parseFloat(st.ticker.price24hPcnt);
+    var priceEl = tile.querySelector('.tile-price');
+    var changeEl = tile.querySelector('.tile-change');
+    if (!isNaN(lp)) priceEl.textContent = fmt(lp, st.meta.decimals);
+    if (!isNaN(pct)){
+      changeEl.className = 'tile-change ' + (pct >= 0 ? 'up' : 'down');
+      changeEl.textContent = (pct >= 0 ? '+' : '') + (pct * 100).toFixed(2) + '% 24h';
+    }
+  }
+
+  function scheduleReconnect(){
+    setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 1.7, 15000);
+  }
+
+  /* ============================================================
+     Clock, candle countdown, staleness
+     ============================================================ */
+  function tickClock(){
+    var now = new Date();
+    els.clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+
+    var msIntoCandle = now.getTime() % CANDLE_MS;
+    var msLeft = CANDLE_MS - msIntoCandle;
+    var mins = Math.floor(msLeft / 60000);
+    var secs = Math.floor((msLeft % 60000) / 1000);
+    els.countdown.textContent = '1H close in ' + pad(mins) + ':' + pad(secs);
+    els.countdown.className = 'countdown' + (msLeft < 60000 ? ' closing' : '');
+
+    if (lastTickerTs && Date.now() - lastTickerTs > STALE_MS){
+      els.price.classList.add('stale');
+      setStatus('stale');
+    }
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ============================================================
+     Controls
+     ============================================================ */
+  function setSound(on){
+    soundOn = on;
+    if (on) ensureAudio();
+    els.soundToggle.classList.toggle('on', on);
+    els.soundToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+    els.soundLabel.textContent = on ? 'Sound on' : 'Sound off';
+    els.waveOn.style.display = on ? '' : 'none';
+    els.waveOff.style.display = on ? 'none' : '';
+  }
+  setSound(false);
+  els.soundToggle.addEventListener('click', function(){ setSound(!soundOn); });
+
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible' && (!ws || ws.readyState > 1)) connect();
+  });
+
+  /* ============================================================
+     Boot
+     ============================================================ */
+  applyPrice('---,---.-');   // board at rest, waiting for the first tick
+  buildTiles();
+  loadAllHistory()
+    .catch(function(err){
+      showError('Could not load 1H history: ' + err.message);
+    })
+    .then(function(){ connect(); });
+})();
+</script>
+
+</body>
+</html>
