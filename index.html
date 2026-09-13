@@ -35,10 +35,19 @@
     -webkit-font-smoothing:antialiased;
     overscroll-behavior:none;
   }
+  @supports (height: 100dvh){
+    html,body{ height:100dvh; }
+  }
 
-  /* Board area: everything above the tab bar. */
+  /* Board area: everything above the tab bar.
+     status-bar-style is black-translucent, which draws our content straight
+     under the status bar / Dynamic Island — so the top has to be pushed down
+     by safe-area-inset-top manually, same as the bottom already is for the
+     home indicator. Without this the boards' own headers sit partly behind
+     the status bar (worst on the taller Dynamic Island inset on 15/16 Pro). */
   #stage{
-    position:fixed; inset:0;
+    position:fixed; left:0; right:0;
+    top:env(safe-area-inset-top);
     bottom:calc(54px + env(safe-area-inset-bottom));
   }
   #stage iframe{
