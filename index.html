@@ -293,6 +293,9 @@
     if (e.data && e.data.type === "goldenratio-goto" && active !== "fibo") {
       select("fibo");
     }
+    if (e.data && e.data.type === "btcliveboard-goto" && active !== "live") {
+      select("live");
+    }
   });
 
   /* ---------- install hint (browser tab only) ---------- */
