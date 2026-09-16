@@ -1,11 +1,11 @@
 # iOSAPP
 
-Two ways to run the four BTC dashboards as one app on iPhone.
+Two ways to run the trading dashboards as one app on iPhone.
 
 | | What it is | Needs a Mac |
 |---|---|---|
-| **`/` (this site)** | Installable web app — four tabs, added to the Home Screen | no |
-| **`ios/`** | Native SwiftUI app wrapping the same four boards | yes |
+| **`/` (this site)** | Installable web app — six tabs, added to the Home Screen | no |
+| **`ios/`** | Native SwiftUI app wrapping four of the boards | yes |
 
 The web app is the one to try first. It does nearly everything the native app
 does, installs in seconds, and updates the moment you push.
@@ -18,8 +18,13 @@ Live at **https://alicetin1905-ux.github.io/iOSAPP/**
 |---|---|
 | **Live** | `/BTCLiveBoard/` |
 | **ATLAS** | `/ATLAS/` |
-| **Crucible** | `/CRUCIBLE/` |
+| **Liq** | `/Liquidations/` |
 | **Fibo** | `/GoldenRatio/` |
+| **Bot** | `/UltimateTradingBot/` |
+| **Traders** | `/TopTraders/` |
+
+The native app in `ios/` still wraps only the original four; Liq, Bot and
+Traders are web-hub only.
 
 ### Install it
 

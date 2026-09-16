@@ -27,6 +27,7 @@
     --crucible:#fa6657;
     --fibo:#f0ba0a;
     --bot:#b98bff;
+    --traders:#ff77c8;
   }
   *{ box-sizing:border-box; }
   html,body{
@@ -172,7 +173,9 @@
     { id:"fibo",     label:"Fibo",     path:"/GoldenRatio/",  tint:"var(--fibo)",
       icon:'<path d="M3 17.5l5.5-5.5 3.5 3 6.5-7.5"/><path d="M14.5 7.5h4v4"/>' },
     { id:"bot",      label:"Bot",      path:"/UltimateTradingBot/", tint:"var(--bot)",
-      icon:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5"/><path d="M12 3.5h.01"/><path d="M9 13v1.4"/><path d="M15 13v1.4"/><path d="M9 17h6"/>' }
+      icon:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5"/><path d="M12 3.5h.01"/><path d="M9 13v1.4"/><path d="M15 13v1.4"/><path d="M9 17h6"/>' },
+    { id:"traders",  label:"Traders",  path:"/TopTraders/",   tint:"var(--traders)",
+      icon:'<path d="M4 6.5h12"/><path d="M4 12h7"/><path d="M4 17.5h10"/>' }
   ];
 
   var stage   = document.getElementById("stage");
