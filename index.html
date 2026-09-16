@@ -303,13 +303,9 @@
   }
 
   /* ---------- boot ---------- */
-  var start = "live";
-  try {
-    var saved = localStorage.getItem("atlas.tab");
-    if (saved && tabById(saved)) start = saved;
-  } catch (e) {}
-
-  select(start);
+  // Always open on Live. select() still records the active tab on every
+  // switch (used by reload()), it just no longer decides where boot starts.
+  select("live");
 })();
 </script>
 </body>
