@@ -1,7 +1,7 @@
 {
   "name": "ATLAS Suite",
   "short_name": "ATLAS",
-  "description": "BTC live board, signals, liquidations and auto-Fibonacci in one app.",
+  "description": "BTC live board, signals, liquidations and ETF flows in one app.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
