@@ -19,11 +19,11 @@ Live at **https://alicetin1905-ux.github.io/iOSAPP/**
 | **Live** | `/BTCLiveBoard/` |
 | **ATLAS** | `/ATLAS/` |
 | **Liq** | `/Liquidations/` |
-| **Flow** | `/ETF/` (BTC Flow Radar: VPVR chart + BTC/ETH/SOL ETF inflow/outflow) |
+| **ETF** | `/ETF/` (BTC Flow Radar: VPVR chart + BTC/ETH/SOL ETF inflow/outflow) |
 | **Bot** | `/TradeBot/` |
 
 The native app in `ios/` still wraps only the original four (including Golden
-Ratio, which the web hub no longer shows); Liq, Flow and Bot are web-hub only.
+Ratio, which the web hub no longer shows); Liq, ETF and Bot are web-hub only.
 
 ### Install it
 
