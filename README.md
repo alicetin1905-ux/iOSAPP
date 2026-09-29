@@ -20,11 +20,10 @@ Live at **https://alicetin1905-ux.github.io/iOSAPP/**
 | **ATLAS** | `/ATLAS/` |
 | **Liq** | `/Liquidations/` |
 | **Fibo** | `/GoldenRatio/` |
-| **Bot** | `/UltimateTradingBot/` |
-| **Traders** | `/TopTraders/` |
+| **Bot** | `/TradeBot/` |
 
-The native app in `ios/` still wraps only the original four; Liq, Bot and
-Traders are web-hub only.
+The native app in `ios/` still wraps only the original four; Liq and Bot
+are web-hub only.
 
 ### Install it
 
