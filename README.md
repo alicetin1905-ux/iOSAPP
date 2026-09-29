@@ -19,7 +19,7 @@ Live at **https://alicetin1905-ux.github.io/iOSAPP/**
 | **Live** | `/BTCLiveBoard/` |
 | **ATLAS** | `/ATLAS/` |
 | **Liq** | `/Liquidations/` |
-| **ETF** | `/ETF/` (BTC Flow Radar: VPVR chart + BTC/ETH/SOL ETF inflow/outflow) |
+| **ETF** | `/ETF/` (VPVR chart + BTC/ETH/SOL ETF inflow/outflow) |
 | **Bot** | `/TradeBot/` |
 
 The native app in `ios/` still wraps only the original four (including Golden
